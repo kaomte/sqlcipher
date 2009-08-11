@@ -47,6 +47,13 @@
 #define CODEC_TRACE(X)
 #endif
 
+void sqlite3CodecGetKey(sqlite3*, int, void**, int*); 
+
+#define SQLCIPHER_VACUUM
+#ifdef SQLCIPHER_VACUUM
+#include "crypto_vacuum.c"
+#endif
+
 typedef struct {
   int derive_key;
   EVP_CIPHER *evp_cipher;
@@ -495,7 +502,7 @@ int sqlite3_rekey(sqlite3 *db, const void *pKey, int nKey) {
   OpenSSL_add_all_algorithms();
   if(db && pKey && nKey) {
     struct Db *pDb = &db->aDb[0];
-    CODEC_TRACE(("sqlite3_rekey: database pDb=%d\n", pDb));
+    CODEC_TRACE(("sqlite3_rekey: database pDb=%d pageSize=%d reserveSize=%d\n", pDb, sqlite3BtreeGetPageSize(pDb->pBt), sqlite3BtreeGetReserve(pDb->pBt)));
     if(pDb->pBt) {
       codec_ctx *ctx;
       int rc, page_count;
@@ -513,20 +520,32 @@ int sqlite3_rekey(sqlite3 *db, const void *pKey, int nKey) {
         
         /* prepare this setup as if it had already been initialized */
         RAND_pseudo_bytes(ctx->kdf_salt, ctx->kdf_salt_sz);
+        sqlite3BtreeSetPageSize(ctx->pBt,  sqlite3BtreeGetPageSize(pDb->pBt), 0, 0); // restore the original page size
         ctx->read_ctx->key_sz = ctx->read_ctx->iv_sz =  ctx->read_ctx->pass_sz = 0;
+        sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), NULL, NULL); // remove the context we created, temporarily
       }
 
       if(ctx->read_ctx->iv_sz != ctx->write_ctx->iv_sz) {
+#ifdef SQLCIPHER_VACUUM
         char *error;
         CODEC_TRACE(("sqlite3_rekey: updating page size for iv_sz change from %d to %d\n", ctx->read_ctx->iv_sz, ctx->write_ctx->iv_sz));
         db->nextPagesize = sqlite3BtreeGetPageSize(pDb->pBt);
         pDb->pBt->pBt->pageSizeFixed = 0; /* required for sqlite3BtreeSetPageSize to modify pagesize setting */
-        sqlite3BtreeSetPageSize(pDb->pBt, db->nextPagesize, ctx->write_ctx->iv_sz, 0);
-        sqlite3RunVacuum(&error, db);
+        if((rc = sqlite3RunVacuumReserve(&error, db,  ctx->write_ctx->iv_sz)) != SQLITE_OK) {
+          CODEC_TRACE(("sqlite3_rekey: vacuum error %s\n", error));
+	}
+        CODEC_TRACE(("sqlite3_rekey: completed vacuum\n"));
+#else
+        CODEC_TRACE(("sqlite3_rekey: unable to change page size to accomodate IV. Try compiling with -DSQLCIPHER_VACUUM\n"));
+        return SQLITE_ERROR;
+#endif
       }
 
+      sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), sqlite3Codec, (void *) ctx); //restore context
       codec_set_pass_key(db, 0, pKey, nKey, 1);
       ctx->mode_rekey = 1; 
+
+      CODEC_TRACE(("sqlite3_rekey: rewriting database with new key\n"));
     
       /* do stuff here to rewrite the database 
       ** 1. Create a transaction on the database
@@ -584,7 +603,6 @@ void sqlite3CodecGetKey(sqlite3* db, int nDb, void **zKey, int *nKey) {
     }
   }
 }
-
 
 /* END CRYPTO */
 #endif
