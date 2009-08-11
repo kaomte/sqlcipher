@@ -47,6 +47,7 @@
 #define CODEC_TRACE(X)
 #endif
 
+void sqlite3FreeCodecArg(void *pCodecArg);
 void sqlite3CodecGetKey(sqlite3*, int, void**, int*); 
 
 #define SQLCIPHER_VACUUM
@@ -448,7 +449,7 @@ int sqlite3CodecAttach(sqlite3* db, int nDb, const void *zKey, int nKey) {
       RAND_pseudo_bytes(ctx->kdf_salt, FILE_HEADER_SZ);
     }
 
-    sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), sqlite3Codec, (void *) ctx);
+    sqlite3pager_sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), sqlite3Codec, NULL, sqlite3FreeCodecArg, (void *) ctx);
 
     codec_set_cipher_name(db, nDb, CIPHER, 0);
     codec_set_kdf_iter(db, nDb, PBKDF2_ITER, 0);
@@ -461,11 +462,10 @@ int sqlite3CodecAttach(sqlite3* db, int nDb, const void *zKey, int nKey) {
   return SQLITE_ERROR;
 }
 
-int sqlite3FreeCodecArg(void *pCodecArg) {
+void sqlite3FreeCodecArg(void *pCodecArg) {
   codec_ctx *ctx = (codec_ctx *) pCodecArg;
-  if(pCodecArg == NULL) return SQLITE_ERROR;
+  if(pCodecArg == NULL) return;
   codec_ctx_free(&ctx); // wipe and free allocated memory for the context 
-  return SQLITE_OK;
 }
 
 void sqlite3_activate_see(const char* in) {
