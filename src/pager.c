@@ -5350,6 +5350,12 @@ void sqlite3pager_sqlite3PagerSetCodec(
   sqlite3PagerSetCodec(pPager, xCodec, xCodecSizeChng, xCodecFree, pCodec); 
 }
 
+void sqlite3pager_sqlite3PagerClearCodec(Pager *pPager) {
+  pPager->xCodec = NULL;
+  pPager->xCodecSizeChng = NULL;
+  pPager->xCodecFree = NULL;
+  pPager->pCodec = NULL;
+}
 
 #endif
 /* END CRYPTO */

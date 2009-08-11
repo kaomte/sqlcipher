@@ -101,15 +101,14 @@ static int execSql(sqlite3 *db, const char *zSql);
 static int sqlite3RunVacuumReserve(char **pzErrMsg, sqlite3 *db, int nRes){
   int rc = SQLITE_OK;     /* Return code from service routines */
   Btree *pMain;           /* The database being vacuumed */
-  Pager *pMainPager;      /* Pager for database being vacuumed */
   Btree *pTemp;           /* The temporary database we vacuum into */
   char *zSql = 0;         /* SQL statements */
   int saved_flags;        /* Saved value of the db->flags */
   int saved_nChange;      /* Saved value of db->nChange */
   int saved_nTotalChange; /* Saved value of db->nTotalChange */
   Db *pDb = 0;            /* Database to detach at end of vacuum */
-  int isMemDb;            /* True is vacuuming a :memory: database */
-  //int nRes;  // SQLCipher: commented out to allow nRes to be manipulated
+  int isMemDb;            /* True if vacuuming a :memory: database */
+  //int nRes; // SQLCipher: commented out to allow nRes to be manipulated
 
   if( !db->autoCommit ){
     sqlite3SetString(pzErrMsg, db, "cannot VACUUM from within a transaction");
@@ -123,8 +122,7 @@ static int sqlite3RunVacuumReserve(char **pzErrMsg, sqlite3 *db, int nRes){
   db->flags |= SQLITE_WriteSchema | SQLITE_IgnoreChecks;
 
   pMain = db->aDb[0].pBt;
-  pMainPager = sqlite3BtreePager(pMain);
-  isMemDb = sqlite3PagerFile(pMainPager)->pMethods==0;
+  isMemDb = sqlite3PagerIsMemdb(sqlite3BtreePager(pMain));
 
   /* Attach the temporary database as 'vacuum_db'. The synchronous pragma
   ** can be set to 'off' for this file, as it is not recovered if a crash
@@ -261,10 +259,10 @@ static int sqlite3RunVacuumReserve(char **pzErrMsg, sqlite3 *db, int nRes){
     ** connections to the same database will know to reread the schema.
     */
     static const unsigned char aCopy[] = {
-       1, 1,    /* Add one to the old schema cookie */
-       3, 0,    /* Preserve the default page cache size */
-       5, 0,    /* Preserve the default text encoding */
-       6, 0,    /* Preserve the user version */
+       BTREE_SCHEMA_VERSION,     1,  /* Add one to the old schema cookie */
+       BTREE_DEFAULT_CACHE_SIZE, 0,  /* Preserve the default page cache size */
+       BTREE_TEXT_ENCODING,      0,  /* Preserve the text encoding */
+       BTREE_USER_VERSION,       0,  /* Preserve the user version */
     };
 
     assert( 1==sqlite3BtreeIsInTrans(pTemp) );
@@ -274,8 +272,7 @@ static int sqlite3RunVacuumReserve(char **pzErrMsg, sqlite3 *db, int nRes){
     for(i=0; i<ArraySize(aCopy); i+=2){
       /* GetMeta() and UpdateMeta() cannot fail in this context because
       ** we already have page 1 loaded into cache and marked dirty. */
-      rc = sqlite3BtreeGetMeta(pMain, aCopy[i], &meta);
-      if( NEVER(rc!=SQLITE_OK) ) goto end_of_vacuum;
+      sqlite3BtreeGetMeta(pMain, aCopy[i], &meta);
       rc = sqlite3BtreeUpdateMeta(pTemp, aCopy[i], meta+aCopy[i+1]);
       if( NEVER(rc!=SQLITE_OK) ) goto end_of_vacuum;
     }

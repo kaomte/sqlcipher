@@ -522,8 +522,9 @@ int sqlite3_rekey(sqlite3 *db, const void *pKey, int nKey) {
         RAND_pseudo_bytes(ctx->kdf_salt, ctx->kdf_salt_sz);
         sqlite3BtreeSetPageSize(ctx->pBt,  sqlite3BtreeGetPageSize(pDb->pBt), 0, 0); // restore the original page size
         ctx->read_ctx->key_sz = ctx->read_ctx->iv_sz =  ctx->read_ctx->pass_sz = 0;
-        sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), NULL, NULL); // remove the context we created, temporarily
+        
       }
+      sqlite3pager_sqlite3PagerClearCodec(sqlite3BtreePager(pDb->pBt)); // remove the context temporarily, in case a vacuum is needed
 
       if(ctx->read_ctx->iv_sz != ctx->write_ctx->iv_sz) {
 #ifdef SQLCIPHER_VACUUM
@@ -541,7 +542,7 @@ int sqlite3_rekey(sqlite3 *db, const void *pKey, int nKey) {
 #endif
       }
 
-      sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), sqlite3Codec, (void *) ctx); //restore context
+      sqlite3pager_sqlite3PagerSetCodec(sqlite3BtreePager(pDb->pBt), sqlite3Codec, NULL, sqlite3FreeCodecArg, (void *) ctx); //restore context
       codec_set_pass_key(db, 0, pKey, nKey, 1);
       ctx->mode_rekey = 1; 
 
