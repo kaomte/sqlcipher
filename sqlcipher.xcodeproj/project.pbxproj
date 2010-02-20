@@ -146,7 +146,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "./configure CFLAGS=\"-DSQLITE_HAS_CODEC -DSQLITE_TEMP_STORE=2\"\nmake sqlite3.c\nexit 0";
+			shellScript = "./configure CFLAGS=\"-DSQLITE_HAS_CODEC -DSQLITE_ENABLE_FTS3 -DSQLITE_TEMP_STORE=2\"\nmake sqlite3.c\nexit 0";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -182,6 +182,7 @@
 				HEADER_SEARCH_PATHS = "$(OPENSSL_SRC)/include";
 				INSTALL_PATH = /usr/local/lib;
 				OTHER_CFLAGS = (
+					"-DSQLITE_ENABLE_FTS3",
 					"-DSQLITE_HAS_CODEC",
 					"-DNDEBUG",
 					"-DSQLITE_OS_UNIX=1",
@@ -201,6 +202,7 @@
 				HEADER_SEARCH_PATHS = "$(OPENSSL_SRC)/include";
 				INSTALL_PATH = /usr/local/lib;
 				OTHER_CFLAGS = (
+					"-DSQLITE_ENABLE_FTS3",
 					"-DSQLITE_HAS_CODEC",
 					"-DNDEBUG",
 					"-DSQLITE_OS_UNIX=1",
